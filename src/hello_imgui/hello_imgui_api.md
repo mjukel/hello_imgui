@@ -12,15 +12,18 @@
   * [ImGui window params](#imgui-window-params)
       * [ImGuiWindowParams](#imguiwindowparams)
       * [Default window types](#default-window-types)
-  * [Applications assets](#applications-assets)
-      * [Assets Files structure](#assets-files-structure)
-      * [Load Assets as data buffer](#load-assets-as-data-buffer)
-      * [Get assets path](#get-assets-path)
   * [Docking](#docking)
       * [Docking Params: Example usage](#docking-params-example-usage)
       * [Docking Splits](#docking-splits)
       * [Dockable window](#dockable-window)
       * [Docking Params](#docking-params)
+  * [Applications assets](#applications-assets)
+      * [Assets Files structure](#assets-files-structure)
+      * [Load Assets as data buffer](#load-assets-as-data-buffer)
+      * [Get assets path](#get-assets-path)
+  * [Display images](#display-images)
+      * [HelloImGui::ImageFromAsset](#helloimguiimagefromasset)
+  * [Backend Pointers](#backend-pointers)
 
 # API
 
@@ -63,6 +66,9 @@ The diagram below summarize all the possible settings and callbacks (which are e
     imgui window params (use docking, showMenuBar, ProvideFullScreenWindow, etc)
 * `dockingParams`: _see [docking_params.h](docking_params.h)_.
     dockable windows content and layout
+* `backendPointers`: _see [backend_pointers.h](backend_pointers.h)_.
+   A struct that contains optional pointers to the backend implementations. These pointers will be filled 
+   when the application starts
 * `appShallExit`: _bool, default=false_.
    will be set to true by the app when exiting.
    _Note: 'appShallExit' has no effect on Mobile Devices (iOS, Android) and under emscripten, since these apps
@@ -100,6 +106,10 @@ See [runner_callbacks.h](runner_callbacks.h).
 
 * `PostInit`: *VoidFunction, default=empty*.
     You can here add a function that will be called once after OpenGL and ImGui are inited
+
+* `BeforeExit`: *VoidFunction, default=empty*.
+    You can here add a function that will be called once before exiting (when OpenGL and ImGui are
+    still inited)
 
 * `AnyBackendEventCallback`: *AnyBackendCallback, default=empty*.
   Callbacks for events from a specific backend. _Only implemented for SDL, where the event
@@ -226,6 +236,128 @@ In order to change the application window settings, change the _AppWindowsParams
 
 ----
 
+## Docking
+
+See [docking_params.h](docking_params.h).
+
+
+HelloImGui facilitates the use of dockable windows (based on ImGui [docking branch](https://github.com/ocornut/imgui/tree/docking)).
+
+You can easily specify the default layout of the dockable windows, as well as their GUI code.
+HelloImGui will then provide a "View" menu with options in order to show/hide the dockable windows, and to restore the default layout
+
+![demo docking](../../docs/images/docking.gif)
+
+Source for this example: [src/hello_imgui_demos/hello_imgui_demodocking](../../src/hello_imgui_demos/hello_imgui_demodocking)
+
+This is done via the `DockingParams` struct: its member `dockingSplits` specifies the layout, 
+and its member `dockableWindows` specifies the list of dockable windows, along with their default location, 
+and their code (given by lambdas). See doc below for more details.
+
+#### Docking Params: Example usage
+
+
+````cpp
+HelloImGui::RunnerParams runnerParams;
+runnerParams.imGuiWindowParams.defaultImGuiWindowType =
+    HelloImGui::DefaultImGuiWindowType::ProvideFullScreenDockSpace;
+
+runnerParams.dockingParams.dockingSplits =
+{
+    // First, add a bottom space whose height is 25% of the app height
+    // This will split the preexisting default dockspace "MainDockSpace"
+    // in two parts.
+    { "MainDockSpace", "BottomSpace", ImGuiDir_Down, 0.25 },
+    // Then, add a space to the left which occupies a column
+    // whose width is 25% of the app height
+    { "MainDockSpace", "LeftSpace", ImGuiDir_Left, 0.25 }
+    // We now have three spaces: "MainDockSpace", "BottomSpace", and "LeftSpace"
+};
+runnerParams.dockingParams.dockableWindows =
+{
+    // A Window named "Main" will be placed in "MainDockSpace".
+    // Its Gui is provided by the VoidFunction "MainGui"
+    {"Main", "MainDockSpace", MainGui},
+    // A Log  window named "Logs" will be placed in "BottomSpace".
+    // Its Gui is provided by the VoidFunction "ShowLogs"
+    {"Logs", "BottomSpace", ShowLogs},
+    // A Command panel named "Commands" will be placed in "LeftSpace".
+    // Its Gui is provided by the VoidFunction "ShowCommandsPanel"
+    {"Commands", "LeftSpace", ShowCommandsPanel}
+};
+
+runnerParams.imGuiWindowParams.showMenuBar = true;
+runnerParams.imGuiWindowParams.showStatusBar = true;
+
+HelloImGui::Run(runnerParams);
+````
+
+
+#### Docking Splits
+
+ **DockingSplit** is a struct that defines the way the docking splits should be applied on the screen
+ in order to create new Dock Spaces. _DockingParams_ contains a _vector[DockingSplit]_,
+ in order to partition the screen at your will.
+
+_Members:_
+
+* `initialDock`: _DockSpaceName (aka string)_
+
+    id of the space that should be split.
+    At the start, there is only one Dock Space named "MainDockSpace".
+    You should start by partitioning this space, in order to create a new dock space.
+
+* `newDock`: _DockSpaceName (aka string)_. id of the new dock space that will be created
+* `direction`: *ImGuiDir_ (enum with ImGuiDir_Down, ImGuiDir_Down, ImGuiDir_Left, ImGuiDir_Right)*.
+Direction where this dock space should be created
+* `ratio`: _float, default=0.25f_. Ratio of the initialDock size that should be used by the new dock space
+
+#### Dockable window
+
+ **DockableWindow** is a struct that represents a window that can be docked.
+
+_Members:_
+
+* `label`: _string_. Title of the window.
+* `dockSpaceName`: _DockSpaceName (aka string)_. Id of the dock space where this window
+   should initialy be placed
+* `GuiFunction`: _VoidFuntion_. Any function that will render this window's Gui.
+* `isVisible`: _bool, default=true_. Flag that indicates whether this window is visible or not.
+* `canBeClosed`: _bool, default=true_. Flag that indicates whether the user can close this window.
+* `callBeginEnd`: _bool, default=true_. Flag that indicates whether ImGui::Begin and ImGui::End
+   calls should be added automatically (with the given "label"). Set to false if you want to call
+   ImGui::Begin/End yourself
+* `includeInViewMenu`: _bool, default=true_. Flag that indicates whether this window should be mentioned
+   in the view menu.
+* `imGuiWindowFlags`: _ImGuiWindowFlags, default=0_. Window flags, see enum ImGuiWindowFlags_
+* `windowSize`: _ImVec2, default=(0.f, 0.f) (i.e let the app decide)_. Window size (unused if docked)
+* `windowSizeCondition`: _ImGuiCond, default=ImGuiCond_FirstUseEver_. When to apply the window size.
+* `windowPos`: _ImVec2, default=(0.f, 0.f) (i.e let the app decide)_. Window position (unused if docked)
+* `windowPosCondition`: _ImGuiCond, default=ImGuiCond_FirstUseEver_. When to apply the window position.
+* `focusWindowAtNextFrame`: _bool, default = false_. If set to true this window will be focused at the next frame.
+
+#### Docking Params
+
+ **DockingParams** contains all the settings concerning the docking, 
+ together _with the Gui functions for the docked windows_.
+
+ _Members:_
+
+* `dockingSplits`: _vector[DockingSplit]_.
+  Defines the way docking splits should be applied on the screen in order to create new Dock Spaces
+* `dockableWindows`: _vector[DockableWindow]_.
+  List of the dockable windows, together with their Gui code
+* `resetUserDockLayout`: _bool, default=true_.
+  Reset user layout at application startup
+
+ _Helpers:_
+
+ * `DockableWindow * dockableWindowOfName(const std::string & name)`: returns a pointer to a dockable window
+ * `void focusDockableWindow(const std::string& name)`: will focus a dockable window
+
+
+----
+
 ## Applications assets
 
 See [hello_imgui_assets.h](hello_imgui_assets.h).
@@ -278,104 +410,50 @@ Then you can load the asset "fonts/my_font.ttf", on all platforms.
   assets can be compressed under android, and you cannot use standard file operations!
   Use LoadAssetFileData instead
 
-
 ----
 
-## Docking
+## Display images
 
-See [docking_params.h](docking_params.h).
+#### HelloImGui::ImageFromAsset
 
-#### Docking Params: Example usage
+See [image_from_asset.h](image_from_asset.h).
 
-**Docking params: Example usage**
 
-````cpp
-HelloImGui::RunnerParams runnerParams;
-runnerParams.imGuiWindowParams.defaultImGuiWindowType =
-    HelloImGui::DefaultImGuiWindowType::ProvideFullScreenDockSpace;
+* `HelloImGui::ImageFromAsset(const char *assetPath, size, ...)`: will display a static image from the assets.
+* `bool HelloImGui::ImageButtonFromAsset(const char *assetPath, size, ...)`: will display a button using an image from the assets.
+* `ImTextureID HelloImGui::ImTextureIdFromAsset(const char *assetPath)`: will return a texture ID for an image loaded from the assets.
 
-runnerParams.dockingParams.dockingSplits =
-{
-    // First, add a bottom space whose height is 25% of the app height
-    // This will split the preexisting default dockspace "MainDockSpace"
-    // in two parts.
-    { "MainDockSpace", "BottomSpace", ImGuiDir_Down, 0.25 },
-    // Then, add a space to the left which occupies a column
-    // whose width is 25% of the app height
-    { "MainDockSpace", "LeftSpace", ImGuiDir_Left, 0.25 }
-    // We now have three spaces: "MainDockSpace", "BottomSpace", and "LeftSpace"
-};
-runnerParams.dockingParams.dockableWindows =
-{
-    // A Window named "Main" will be placed in "MainDockSpace".
-    // Its Gui is provided by the VoidFunction "MainGui"
-    {"Main", "MainDockSpace", MainGui},
-    // A Log  window named "Logs" will be placed in "BottomSpace".
-    // Its Gui is provided by the VoidFunction "ShowLogs"
-    {"Logs", "BottomSpace", ShowLogs},
-    // A Command panel named "Commands" will be placed in "LeftSpace".
-    // Its Gui is provided by the VoidFunction "ShowCommandsPanel"
-    {"Commands", "LeftSpace", ShowCommandsPanel}
-};
+Images are loaded when first displayed, and then cached (they will be freed just before the application exits).
 
-runnerParams.imGuiWindowParams.showMenuBar = true;
-runnerParams.imGuiWindowParams.showStatusBar = true;
-
-HelloImGui::Run(runnerParams);
+For example, given this files structure:
+````
+├── CMakeLists.txt
+├── assets/
+│   └── my_image.jpg
+└── my_app.main.cpp
 ````
 
-#### Docking Splits
+then, you can display "my_image.jpg", using:
 
- **DockingSplit** is a struct that defines the way the docking splits should be applied on the screen
- in order to create new Dock Spaces. _DockingParams_ contains a _vector[DockingSplit]_,
- in order to partition the screen at your will.
+````cpp
+HelloImGui::ImageFromAsset("my_image.jpg");
+````
 
-_Members:_
+*Note: HelloImGui::ImageFromAsset only works with OpenGL backends. It will throw an exception on other backends*
 
-* `initialDock`: _DockSpaceName (aka string)_
+## Backend Pointers
 
-    id of the space that should be split.
-    At the start, there is only one Dock Space named "MainDockSpace".
-    You should start by partitioning this space, in order to create a new dock space.
+**BackendPointers** is a struct that contains optional pointers to the backend implementations (for SDL and GLFW).
 
-* `newDock`: _DockSpaceName (aka string)_. id of the new dock space that will be created
-* `direction`: *ImGuiDir_ (enum with ImGuiDir_Down, ImGuiDir_Down, ImGuiDir_Left, ImGuiDir_Right)*.
-Direction where this dock space should be created
-* `ratio`: _float, default=0.25f_. Ratio of the initialDock size that should be used by the new dock space
+These pointers will be filled when the application starts, and you can use them to customize
+your application behavior using the selected backend.
 
-#### Dockable window
+ Members:
+* `glfwWindow`: _void *, default=nullptr_. Pointer to the main GLFW window (of type `GLFWwindow*`).
+  Only filled if the backend is GLFW.
+* `sdlWindow`: _void *, default=nullptr_. Pointer to the main SDL window (of type `SDL_Window*`).
+  Only filled if the backend is SDL (or emscripten + sdl)
+* `sdlGlContext`: _void *, default=nullptr_. Pointer to SDL's GlContext (of type `SDL_GLContext`).
+  Only filled if the backend is SDL (or emscripten + sdl)
 
- **DockableWindow** is a struct that represents a window that can be docked.
-
-_Members:_
-
-* `label`: _string_. Title of the window.
-* `dockSpaceName`: _DockSpaceName (aka string)_. Id of the dock space where this window
-   should initialy be placed
-* `GuiFunction`: _VoidFuntion_. Any function that will render this window's Gui.
-* `isVisible`: _bool, default=true_. Flag that indicates whether this window is visible or not.
-* `canBeClosed`: _bool, default=true_. Flag that indicates whether the user can close this window.
-* `callBeginEnd`: _bool, default=true_. Flag that indicates whether ImGui::Begin and ImGui::End
-   calls should be added automatically (with the given "label"). Set to false if you want to call
-   ImGui::Begin/End yourself
-* `includeInViewMenu`: _bool, default=true_. Flag that indicates whether this window should be mentioned
-   in the view menu.
-* `imGuiWindowFlags`: _ImGuiWindowFlags, default=0_. Window flags, see enum ImGuiWindowFlags_
-* `windowSize`: _ImVec2, default=(0.f, 0.f) (i.e let the app decide)_. Window size (unused if docked)
-* `windowSizeCondition`: _ImGuiCond, default=ImGuiCond_FirstUseEver_. When to apply the window size.
-* `windowPos`: _ImVec2, default=(0.f, 0.f) (i.e let the app decide)_. Window position (unused if docked)
-* `windowPosCondition`: _ImGuiCond, default=ImGuiCond_FirstUseEver_. When to apply the window position.
-
-#### Docking Params
-
- **DockingParams** contains all the settings concerning the docking, 
- together _with the Gui functions for the docked windows_.
-
- _Members:_
-
-* `dockingSplits`: _vector[DockingSplit]_.
-  Defines the way docking splits should be applied on the screen in order to create new Dock Spaces
-* `dockableWindows`: _vector[DockableWindow]_.
-  List of the dockable windows, together with their Gui code
-* `resetUserDockLayout`: _bool, default=true_.
-  Reset user layout at application startup
+----

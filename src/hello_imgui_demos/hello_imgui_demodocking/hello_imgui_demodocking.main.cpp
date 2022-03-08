@@ -18,7 +18,7 @@ struct AppState
         Launched
     };
     float rocket_progress = 0.f;
-    RocketState rocketState;
+    RocketState rocketState = RocketState::Init;
 };
 
 // MyLoadFonts: demonstrate
@@ -187,7 +187,7 @@ int main(int, char **)
         {
             case SDL_KEYDOWN:
                 logger.warning( "SDL_KEYDOWN detected\n" );
-                return true; // if you return true, the event is not processd further
+                return false; // if you return true, the event is not processd further
         }
         return false;
 #else
@@ -201,8 +201,17 @@ int main(int, char **)
     // runnerParams.imGuiWindowParams.showStatus_Fps = false;
     runnerParams.callbacks.ShowStatus = [&appState] { StatusBarGui(appState); };
 
+    // In this demo, we also demonstrate multiple viewports (i.e multiple native windows)
+    // you can drag the inner windows outside out the main window in order to create another native window
+    runnerParams.callbacks.SetupImGuiConfig = [] {
+        ImGuiIO& io = ImGui::GetIO();
+        io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+#ifndef __EMSCRIPTEN__
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+#endif
+    };
+
     // Then, we run the app
     HelloImGui::Run(runnerParams);
     return 0;
 }
-

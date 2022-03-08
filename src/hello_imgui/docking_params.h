@@ -10,8 +10,25 @@
 namespace HelloImGui
 {
 /**
+@@md#DockingIntro
+
+HelloImGui facilitates the use of dockable windows (based on ImGui [docking branch](https://github.com/ocornut/imgui/tree/docking)).
+
+You can easily specify the default layout of the dockable windows, as well as their GUI code.
+HelloImGui will then provide a "View" menu with options in order to show/hide the dockable windows, and to restore the default layout
+
+![demo docking](../../docs/images/docking.gif)
+
+Source for this example: [src/hello_imgui_demos/hello_imgui_demodocking](../../src/hello_imgui_demos/hello_imgui_demodocking)
+
+This is done via the `DockingParams` struct: its member `dockingSplits` specifies the layout, 
+and its member `dockableWindows` specifies the list of dockable windows, along with their default location, 
+and their code (given by lambdas). See doc below for more details.
+@@md
+
+
+Docking params: Example usage
 @@md#DockingExample
-**Docking params: Example usage**
 
 ````cpp
 HelloImGui::RunnerParams runnerParams;
@@ -47,14 +64,13 @@ runnerParams.imGuiWindowParams.showStatusBar = true;
 
 HelloImGui::Run(runnerParams);
 ````
+
 @@md
 */
 
-/**
-@@md
-A DockSpaceName is a simple string that identifies a zone on the screen where windows can be docked.
-@@md
-*/
+/*****************************************************************************/
+
+//A DockSpaceName is a simple string that identifies a zone on the screen where windows can be docked.
 using DockSpaceName = std::string;
 
 /**
@@ -79,6 +95,10 @@ Direction where this dock space should be created
 */
 struct DockingSplit
 {
+    DockingSplit(const DockSpaceName& initialDock_ = {}, const DockSpaceName& newDock_ = {}, 
+                 ImGuiDir_ direction_ = ImGuiDir_Down, float ratio_ = 0.25f) 
+      : initialDock(initialDock_), newDock(newDock_), direction(direction_), ratio(ratio_) {}
+
     DockSpaceName initialDock;
     DockSpaceName newDock;
     ImGuiDir_ direction;
@@ -107,6 +127,7 @@ _Members:_
 * `windowSizeCondition`: _ImGuiCond, default=ImGuiCond_FirstUseEver_. When to apply the window size.
 * `windowPos`: _ImVec2, default=(0.f, 0.f) (i.e let the app decide)_. Window position (unused if docked)
 * `windowPosCondition`: _ImGuiCond, default=ImGuiCond_FirstUseEver_. When to apply the window position.
+* `focusWindowAtNextFrame`: _bool, default = false_. If set to true this window will be focused at the next frame.
 @@md
 **/
 struct DockableWindow
@@ -139,6 +160,8 @@ struct DockableWindow
 
     ImVec2 windowPosition = ImVec2(0.f, 0.f);
     ImGuiCond  windowPositionCondition = ImGuiCond_FirstUseEver;
+
+    bool focusWindowAtNextFrame = false;
 };
 
 /**
@@ -154,6 +177,12 @@ struct DockableWindow
   List of the dockable windows, together with their Gui code
 * `resetUserDockLayout`: _bool, default=true_.
   Reset user layout at application startup
+
+ _Helpers:_
+
+ * `DockableWindow * dockableWindowOfName(const std::string & name)`: returns a pointer to a dockable window
+ * `void focusDockableWindow(const std::string& name)`: will focus a dockable window
+
 @@md
  */
 struct DockingParams
@@ -168,5 +197,6 @@ struct DockingParams
     bool wasDockLayoutApplied = false;
 
     DockableWindow * dockableWindowOfName(const std::string & name);
+    void focusDockableWindow(const std::string& windowName);
 };
 } // namespace HelloImGui

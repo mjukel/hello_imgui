@@ -1,5 +1,8 @@
-cmake_minimum_required(VERSION 3.10)
-# cmake_policy(VERSION 3.15)
+if (EMSCRIPTEN)
+    cmake_minimum_required(VERSION 3.13) # emscripten uses target_link_options (cmake 3.13+)
+else()
+    cmake_minimum_required(VERSION 3.10)
+endif()
 
 project(HelloImGui LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
@@ -10,8 +13,15 @@ set(CMAKE_CXX_STANDARD 17)
 option(HELLOIMGUI_USE_SDL_OPENGL3 "Build HelloImGui for SDL+OpenGL3" OFF)
 option(HELLOIMGUI_USE_GLFW_OPENGL3 "Build HelloImGui for GLFW+OpenGL3" OFF)
 option(HELLOIMGUI_USE_QT "Build HelloImGui for Qt" OFF)
-option(HELLOIMGUI_USE_SDL_DIRECTX11 "Build HelloImGui for SDL+DirectX11" OFF)
 option(HELLOIMGUI_CREATE_ANDROID_STUDIO_PROJECT "Create Android studio projects in build dir" OFF)
+if (NOT (HELLOIMGUI_USE_SDL_OPENGL3 OR HELLOIMGUI_USE_GLFW_OPENGL3 OR HELLOIMGUI_USE_QT OR HELLOIMGUI_CREATE_ANDROID_STUDIO_PROJECT))
+    message(FATAL_ERROR "Select at least one backend: use either
+        -DHELLOIMGUI_USE_SDL_OPENGL3=ON
+        -DHELLOIMGUI_USE_GLFW_OPENGL3=ON
+        -DHELLOIMGUI_USE_QT=ON
+        -DHELLOIMGUI_CREATE_ANDROID_STUDIO_PROJECT=ON
+    ")
+endif()
 
 if (IOS OR EMSCRIPTEN)
     set(need_opengl_loader OFF)
@@ -31,6 +41,16 @@ else()
     option(HELLOIMGUI_BUILD_DEMOS "Build demos" OFF)
 endif()
 
+#
+# MSVC: Select the solution folder where hello_imgui should be placed
+#
+if (MSVC)
+    if(NOT DEFINED HELLOIMGUI_SOLUTIONFOLDER)
+        set(HELLOIMGUI_SOLUTIONFOLDER hello_imgui)
+    endif()
+endif()
+
+
 set(HELLOIMGUI_BASEPATH ${CMAKE_CURRENT_LIST_DIR} CACHE STRING "Hello imgui base path" FORCE)
 
 set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${CMAKE_CURRENT_LIST_DIR}/cmake/")
@@ -39,6 +59,7 @@ set(CMAKE_MODULE_PATH "${CMAKE_MODULE_PATH};${HELLOIMGUI_BASEPATH}/hello_imgui_c
 
 include(StandardProjectSettings)
 include(StaticAnalyzers)
+include(msvc/msvc_target_group)
 
 
 if (EMSCRIPTEN)

@@ -15,8 +15,6 @@ void ShowDefaultAppMenu_Quit(RunnerParams & runnerParams)
     if (appName.empty())
         appName = "App";
 
-    auto& dockableWindows = runnerParams.dockingParams.dockableWindows;
-
     bool hideMenuBecauseEmpty = false;
 #ifdef HELLOIMGUI_CANNOTQUIT
     hideMenuBecauseEmpty = true;
@@ -37,7 +35,7 @@ void ShowDefaultAppMenu_Quit(RunnerParams & runnerParams)
 
 void ShowMenu(RunnerParams & runnerParams)
 {
-    bool hasMenu = ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_MenuBar;
+    bool hasMenu = (ImGui::GetCurrentWindow()->Flags & ImGuiWindowFlags_MenuBar) != 0;
     if (!hasMenu)
         return;
 
@@ -64,10 +62,12 @@ void ShowStatus_Fps()
 void ShowStatusBar(const RunnerParams & params)
 {
     float statusWindowHeight = 30.f;
-    ImVec2 windowLocation( 0., ImGui::GetIO().DisplaySize.y - statusWindowHeight );
-    ImVec2 windowSize(ImGui::GetIO().DisplaySize.x, statusWindowHeight);
-    ImGui::SetNextWindowPos(windowLocation);
-    ImGui::SetNextWindowSize(windowSize);
+
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(ImVec2(viewport->Pos.x, viewport->Pos.y + viewport->Size.y - statusWindowHeight));
+    ImGui::SetNextWindowSize(ImVec2(viewport->Size.x, statusWindowHeight));
+    ImGui::SetNextWindowViewport(viewport->ID);
+
     ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoDocking;
     ImGui::Begin("StatusBar", nullptr, windowFlags);
 

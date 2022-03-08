@@ -1,7 +1,7 @@
 set(target_name hello_imgui)
 message(STATUS "Library ${target_name}")
 
-set(imgui_examples_dir ${CMAKE_CURRENT_LIST_DIR}/../../external/imgui/examples)
+set(imgui_backends_dir ${CMAKE_CURRENT_LIST_DIR}/../../external/imgui/backends)
 
 if (APPLE)
     file(GLOB_RECURSE sources *.h *.cpp *.c *.mm)
@@ -18,6 +18,10 @@ if (IOS)
     target_compile_definitions(${target_name} PUBLIC IOS)
     target_compile_definitions(${target_name} PUBLIC HELLOIMGUI_MOBILEDEVICE)
     target_compile_definitions(${target_name} PUBLIC HELLOIMGUI_CANNOTQUIT)
+
+    # this is a hack because imgui_impl_opengl3.cpp does not include <TargetConditional.h>
+    # and thus TARGET_OS_IOS is not found as it should be
+    target_compile_definitions(${target_name} PRIVATE TARGET_OS_IOS)
 endif()
 
 if (EMSCRIPTEN)
@@ -38,13 +42,12 @@ if (HELLOIMGUI_USE_SDL_OPENGL3)
 
         string(REGEX MATCH "SIMULATOR.*" is_simulator ${PLATFORM})
         if (is_simulator)
-            target_link_directories(${target_name} PUBLIC "${HELLOIMGUI_BASEPATH}/external/SDL/Xcode-iOS/SDL/build/Release-iphonesimulator")
+            set(sdl_lib_dir "${HELLOIMGUI_BASEPATH}/external/SDL/Xcode-iOS/SDL/build/Release-iphonesimulator")
         else()
-            target_link_directories(${target_name} PUBLIC "${HELLOIMGUI_BASEPATH}/external/SDL/Xcode-iOS/SDL/build/Release-iphoneos")
+            set(sdl_lib_dir "${HELLOIMGUI_BASEPATH}/external/SDL/Xcode-iOS/SDL/build/Release-iphoneos")
         endif()
 
-        target_link_directories(${target_name} PUBLIC "${HELLOIMGUI_BASEPATH}/external/SDL/Xcode-iOS/SDL/build/Release-iphoneos")
-        target_link_libraries(${target_name} PUBLIC SDL2)
+        target_link_libraries(${target_name} PUBLIC ${sdl_lib_dir}/libSDL2.a)
         target_link_libraries(${target_name} PUBLIC
             "-framework Foundation"
             "-framework AVFoundation"
@@ -81,27 +84,33 @@ if (HELLOIMGUI_USE_SDL_OPENGL3)
         target_compile_definitions(${target_name} PUBLIC HELLOIMGUI_CANNOTQUIT)
         target_compile_definitions(${target_name} PUBLIC HELLOIMGUI_MOBILEDEVICE)
     else()
-        find_package(SDL2 CONFIG REQUIRED)
-        target_link_libraries(${target_name} PUBLIC SDL2::SDL2main SDL2::SDL2-static)
+        if (NOT TARGET SDL2-static) # if SDL is not built as part of the whole build, find it
+            find_package(SDL2 CONFIG REQUIRED)
+            target_link_libraries(${target_name} PUBLIC SDL2::SDL2 SDL2::SDL2main)
+        else()
+            target_link_libraries(${target_name} PUBLIC SDL2-static)
+        endif()
     endif()
 
     target_sources(${target_name} PRIVATE
-        ${imgui_examples_dir}/imgui_impl_opengl3.h
-        ${imgui_examples_dir}/imgui_impl_opengl3.cpp
-        ${imgui_examples_dir}/imgui_impl_sdl.h
-        ${imgui_examples_dir}/imgui_impl_sdl.cpp
+        ${imgui_backends_dir}/imgui_impl_opengl3.h
+        ${imgui_backends_dir}/imgui_impl_opengl3.cpp
+        ${imgui_backends_dir}/imgui_impl_sdl.h
+        ${imgui_backends_dir}/imgui_impl_sdl.cpp
         )
 endif()
 
 if (HELLOIMGUI_USE_GLFW_OPENGL3)
-    find_package(glfw3 CONFIG REQUIRED)
+    if (NOT TARGET glfw) # if glfw is not built as part of the whole build, find it
+        find_package(glfw3 CONFIG REQUIRED)
+    endif()
     target_compile_definitions(${target_name} PUBLIC -DHELLOIMGUI_USE_GLFW_OPENGL3)
     target_link_libraries(${target_name} PUBLIC glfw)
     target_sources(${target_name} PRIVATE
-        ${imgui_examples_dir}/imgui_impl_opengl3.h
-        ${imgui_examples_dir}/imgui_impl_opengl3.cpp
-        ${imgui_examples_dir}/imgui_impl_glfw.h
-        ${imgui_examples_dir}/imgui_impl_glfw.cpp
+        ${imgui_backends_dir}/imgui_impl_opengl3.h
+        ${imgui_backends_dir}/imgui_impl_opengl3.cpp
+        ${imgui_backends_dir}/imgui_impl_glfw.h
+        ${imgui_backends_dir}/imgui_impl_glfw.cpp
         )
 endif()
 
@@ -113,4 +122,13 @@ endif()
 if (HELLOIMGUI_USE_GLAD)
     target_compile_definitions(${target_name} PUBLIC HELLOIMGUI_USE_GLAD IMGUI_IMPL_OPENGL_LOADER_GLAD)
     target_link_libraries(${target_name} PUBLIC glad)
+endif()
+
+if (MSVC)
+    hello_imgui_msvc_target_group_sources(${target_name})
+    hello_imgui_msvc_target_set_folder(${target_name} ${HELLOIMGUI_SOLUTIONFOLDER})
+endif()
+
+if (UNIX AND NOT EMSCRIPTEN)
+    target_link_libraries(hello_imgui PUBLIC stdc++ dl)
 endif()
